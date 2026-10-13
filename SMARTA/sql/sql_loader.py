@@ -1,13 +1,9 @@
-import pandas as pd
-from sqlalchemy import create_engine
+"""Inspect the configured SQL maintenance source without printing credentials."""
 
-engine = create_engine(
-    "mysql+pymysql://root:raghul*99@localhost/smarta"
-)
+from document_loader import load_sql_rows
 
-df = pd.read_sql(
-    "SELECT * FROM maintenance_logs",
-    engine
-)
-
-print(df)
+if __name__ == "__main__":
+    rows = load_sql_rows()
+    print(f"Loaded {len(rows)} SQL maintenance records.")
+    for row in rows[:3]:
+        print(row["text"])

@@ -77,6 +77,7 @@ class _ChatAreaState extends State<ChatArea> {
                     return MessageBubble(
                       text: message.text,
                       isUser: message.isUser,
+                      sources: message.sources,
                     );
                   },
                 ),
@@ -98,9 +99,9 @@ class _EmptyState extends StatelessWidget {
   });
 
   static const List<String> _suggestions = [
-    "Why is the compressor tripping alarm A12?",
-    "What is the recommended maintenance schedule for pump P-3?",
-    "Explain the last recorded fault on line 2.",
+    "What caused SMT13's fault and what action was recorded?",
+    "What symptoms and cause were recorded for SMT16?",
+    "What checks can prevent compressor faults?",
   ];
 
   @override

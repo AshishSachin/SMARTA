@@ -25,7 +25,6 @@ class RightPanel extends StatelessWidget {
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 16),
-
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -33,22 +32,20 @@ class RightPanel extends StatelessWidget {
                 children: [
                   Icon(
                     Icons.circle,
-                    color: connected
-                        ? AppTheme.success
-                        : AppTheme.danger,
+                    color: connected ? AppTheme.success : AppTheme.danger,
                     size: 12,
                   ),
                   const SizedBox(width: 10),
-                  Text(
-                    provider.serverStatus,
-                    style: TextStyle(
-                      color: connected
-                          ? AppTheme.success
-                          : AppTheme.danger,
-                      fontWeight: FontWeight.w600,
+                  Expanded(
+                    child: Text(
+                      provider.serverStatus,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: connected ? AppTheme.success : AppTheme.danger,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                  const Spacer(),
                   IconButton(
                     tooltip: "Refresh",
                     icon: const Icon(
@@ -61,16 +58,12 @@ class RightPanel extends StatelessWidget {
               ),
             ),
           ),
-
           const SizedBox(height: 24),
-
           Text(
             "Session Info",
             style: Theme.of(context).textTheme.titleLarge,
           ),
-
           const SizedBox(height: 16),
-
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),

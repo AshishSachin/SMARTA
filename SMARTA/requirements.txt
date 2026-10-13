@@ -8,3 +8,8 @@ pandas
 openpyxl
 pypdf
 numpy
+sqlalchemy
+pymysql
+keyring
+scikit-learn
+joblib

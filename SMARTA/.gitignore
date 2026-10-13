@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.py[cod]
+data/smarta.sqlite3
+data/smarta.sqlite3-shm
+data/smarta.sqlite3-wal
+.DS_Store
+data/ai4i/
+models/
+*.joblib
+*.metrics.json

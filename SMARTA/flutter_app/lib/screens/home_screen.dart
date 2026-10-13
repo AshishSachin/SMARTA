@@ -6,6 +6,7 @@ import '../../theme.dart';
 import '../../widgets/chat_area.dart';
 import '../../widgets/right_panel.dart';
 import '../../widgets/sidebar.dart';
+import 'predict_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -22,16 +23,13 @@ class HomeScreen extends StatelessWidget {
               const SizedBox(width: 12),
               Consumer<ChatProvider>(
                 builder: (context, provider, _) {
-                  final connected =
-                      provider.serverStatus == "Connected";
+                  final connected = provider.serverStatus == "Connected";
 
                   return Row(
                     children: [
                       Icon(
                         Icons.circle,
-                        color: connected
-                            ? AppTheme.success
-                            : AppTheme.danger,
+                        color: connected ? AppTheme.success : AppTheme.danger,
                         size: 10,
                       ),
                       const SizedBox(width: 6),
@@ -39,9 +37,7 @@ class HomeScreen extends StatelessWidget {
                         provider.serverStatus,
                         style: TextStyle(
                           fontSize: 13,
-                          color: connected
-                              ? AppTheme.success
-                              : AppTheme.danger,
+                          color: connected ? AppTheme.success : AppTheme.danger,
                         ),
                       ),
                     ],
@@ -50,6 +46,16 @@ class HomeScreen extends StatelessWidget {
               ),
             ],
           ),
+          actions: [
+            TextButton.icon(
+              onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                      builder: (_) => const PredictScreen())),
+              icon: const Icon(Icons.analytics_outlined),
+              label: const Text('Predict'),
+            ),
+            const SizedBox(width: 12),
+          ],
         ),
         body: const Row(
           children: [

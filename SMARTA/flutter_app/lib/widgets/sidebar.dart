@@ -81,7 +81,6 @@ class Sidebar extends StatelessWidget {
               ],
             ),
           ),
-
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: SizedBox(
@@ -96,10 +95,8 @@ class Sidebar extends StatelessWidget {
               ),
             ),
           ),
-
           const SizedBox(height: 12),
           const Divider(height: 1),
-
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(vertical: 8),
@@ -114,59 +111,62 @@ class Sidebar extends StatelessWidget {
                     vertical: 3,
                   ),
                   decoration: BoxDecoration(
-                    color: isActive
-                        ? AppTheme.card2
-                        : Colors.transparent,
+                    color: isActive ? AppTheme.card2 : Colors.transparent,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: ListTile(
-                    dense: true,
-                    leading: const Icon(
-                      Icons.chat_bubble_outline,
-                      size: 18,
-                      color: AppTheme.textSecondary,
-                    ),
-                    title: Text(
-                      session.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 14,
-                      ),
-                    ),
-                    onTap: () {
-                      provider.selectChat(session.id);
-                    },
-                    trailing: PopupMenuButton<String>(
-                      color: AppTheme.card,
-                      icon: const Icon(
-                        Icons.more_vert,
+                  child: Material(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(10),
+                    clipBehavior: Clip.antiAlias,
+                    child: ListTile(
+                      dense: true,
+                      leading: const Icon(
+                        Icons.chat_bubble_outline,
                         size: 18,
                         color: AppTheme.textSecondary,
                       ),
-                      onSelected: (value) {
-                        if (value == "rename") {
-                          _renameDialog(
-                            context,
-                            provider,
-                            session,
-                          );
-                        }
-
-                        if (value == "delete") {
-                          provider.deleteChat(session.id);
-                        }
+                      title: Text(
+                        session.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                        ),
+                      ),
+                      onTap: () {
+                        provider.selectChat(session.id);
                       },
-                      itemBuilder: (context) => const [
-                        PopupMenuItem(
-                          value: "rename",
-                          child: Text("Rename"),
+                      trailing: PopupMenuButton<String>(
+                        color: AppTheme.card,
+                        icon: const Icon(
+                          Icons.more_vert,
+                          size: 18,
+                          color: AppTheme.textSecondary,
                         ),
-                        PopupMenuItem(
-                          value: "delete",
-                          child: Text("Delete"),
-                        ),
-                      ],
+                        onSelected: (value) {
+                          if (value == "rename") {
+                            _renameDialog(
+                              context,
+                              provider,
+                              session,
+                            );
+                          }
+
+                          if (value == "delete") {
+                            provider.deleteChat(session.id);
+                          }
+                        },
+                        itemBuilder: (context) => const [
+                          PopupMenuItem(
+                            value: "rename",
+                            child: Text("Rename"),
+                          ),
+                          PopupMenuItem(
+                            value: "delete",
+                            child: Text("Delete"),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 );

@@ -84,9 +84,8 @@ class ChatProvider extends ChangeNotifier {
     );
 
     if (session.title == "New Chat") {
-      session.title = trimmed.length > 30
-          ? "${trimmed.substring(0, 30)}..."
-          : trimmed;
+      session.title =
+          trimmed.length > 30 ? "${trimmed.substring(0, 30)}..." : trimmed;
     }
 
     _isTyping = true;
@@ -96,8 +95,9 @@ class ChatProvider extends ChangeNotifier {
 
     session.messages.add(
       ChatMessage(
-        text: reply,
+        text: reply.answer,
         isUser: false,
+        sources: reply.sources,
       ),
     );
 
