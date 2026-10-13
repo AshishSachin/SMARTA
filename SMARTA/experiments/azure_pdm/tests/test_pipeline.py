@@ -14,7 +14,7 @@ from experiments.azure_pdm.pipeline import (
     chronological_masks,
     machine_group_masks,
 )
-from experiments.azure_pdm.evaluation import event_metrics
+from experiments.azure_pdm.evaluation import event_metrics, validation_alert_budget_curve
 
 
 def fixture_tables(hours: int = 200) -> DatasetTables:
@@ -68,13 +68,16 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(float(row.past_errorID_error2_24h), 0.0)
         self.assertEqual(float(row.past_comp_comp1_24h), 1.0)
         self.assertEqual(float(row.past_comp_comp4_24h), 0.0)
+        self.assertEqual(float(row.past_failure_comp1_24h), 0.0)  # failure at t is not prior history
         after = features.loc[(features.machineID == 1) &
                              (features.datetime == cut + pd.Timedelta(hours=1))].iloc[0]
         self.assertEqual(float(after.past_comp_comp4_24h), 1.0)
         self.assertEqual(int(features.groupby(["machineID", "datetime"]).size().max()), 1)
 
     def test_targets_use_open_lower_closed_upper_horizon_and_multilabel(self):
-        tables = fixture_tables()
+        # Leave room for both the full 168-hour feature history and a complete
+        # 7-day future horizon at the final-boundary assertions.
+        tables = fixture_tables(hours=400)
         features = build_features(tables)
         targets = build_targets(features, tables.failures)
         cut = tables.telemetry.datetime.unique()[168]
@@ -87,6 +90,12 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(int(row.y_24h_any), 1)
         self.assertEqual(int(row.y_7d_any), 1)
         self.assertEqual(len(COMPONENTS), 4)
+        coverage_boundary = targets.loc[(targets.machineID == 1) &
+                                        (targets.datetime == tables.telemetry.datetime.unique()[231])].iloc[0]
+        self.assertTrue(bool(coverage_boundary.valid_7d))  # endpoint at final observation is complete
+        after_boundary = targets.loc[(targets.machineID == 1) &
+                                     (targets.datetime == tables.telemetry.datetime.unique()[232])].iloc[0]
+        self.assertFalse(bool(after_boundary.valid_7d))
 
     def test_maintenance_only_rows_do_not_become_failure_targets(self):
         tables = fixture_tables()
@@ -165,6 +174,40 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(result["detected_events"], 1)
         self.assertEqual(result["false_alarms"], 1)
         self.assertEqual(result["lead_time_hours"]["median"], 1.0)
+        self.assertEqual(result["warning_coverage"]["fraction_of_all_events_warned_at_least_24h"], 0.0)
+
+    def test_event_metrics_report_long_warning_coverage_over_all_events(self):
+        rows = pd.DataFrame({"machineID": [1], "datetime": pd.to_datetime(["2015-01-10 00:00"])})
+        failures = pd.DataFrame({
+            "machineID": [1, 1],
+            "datetime": pd.to_datetime(["2015-01-11 00:00", "2015-01-11 06:00"]),
+            "failure": ["comp1", "comp1"],
+        })
+        result = event_metrics(rows, failures, 168, "comp1", np.array([0.9]), 0.5)
+        self.assertEqual(result["event_count"], 2)
+        self.assertEqual(result["warning_coverage"]["events_warned_at_least_24h"], 1)
+        self.assertEqual(result["warning_coverage"]["fraction_of_all_events_warned_at_least_24h"], 0.5)
+        self.assertEqual(result["warning_coverage"]["events_warned_at_least_7d"], 0)
+
+    def test_validation_alert_budget_curve_selects_only_validation_operating_points(self):
+        rows = pd.DataFrame({
+            "machineID": [1, 1, 1, 1],
+            "datetime": pd.date_range("2015-01-10", periods=4, freq="h"),
+        })
+        failures = pd.DataFrame({
+            "machineID": [1], "datetime": pd.to_datetime(["2015-01-10 02:00"]),
+            "failure": ["comp1"],
+        })
+        scores = np.array([0.9, 0.8, 0.7, 0.1])
+        labels = np.array([1, 1, 0, 0], dtype=np.uint8)
+        curve = validation_alert_budget_curve(
+            rows, failures, 1, "comp1", labels, scores, [0.0, 1.0], threshold_quantiles=5,
+        )
+        self.assertEqual([p["candidate_budget_per_machine_week"] for p in curve], [0.0, 1.0])
+        self.assertTrue(all(p["budget_feasible"] for p in curve))
+        self.assertLessEqual(curve[0]["false_alarms_per_machine_week"], 0.0)
+        self.assertLessEqual(curve[1]["false_alarms_per_machine_week"], 1.0)
+        self.assertGreaterEqual(curve[1]["event_recall"], curve[0]["event_recall"])
 
 
 if __name__ == "__main__":

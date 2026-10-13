@@ -28,6 +28,7 @@ from .evaluation import (
     row_metrics,
     target_label_map,
     target_score_map,
+    validation_alert_budget_curve,
 )
 from .pipeline import (
     COMPONENTS,
@@ -41,6 +42,7 @@ from .pipeline import (
 
 
 ROOT = Path(__file__).resolve().parent
+ACTIVE_RUN_STATUS_PATH: Path | None = None
 
 
 def sha256(path: Path) -> str:
@@ -121,6 +123,7 @@ def _output_targets(target_matrix: np.ndarray) -> dict[str, np.ndarray]:
 
 
 def run(config_path: Path, dataset_override: str | None = None) -> dict[str, Any]:
+    global ACTIVE_RUN_STATUS_PATH
     config = json.loads(config_path.read_text())
     zip_path = Path(dataset_override or config["dataset_zip"]).expanduser().resolve()
     if not zip_path.is_file():
@@ -131,6 +134,13 @@ def run(config_path: Path, dataset_override: str | None = None) -> dict[str, Any
     run_directories = {key: directory / run_id for key, directory in directories.items()}
     for directory in run_directories.values():
         directory.mkdir(parents=True, exist_ok=False)
+    status_path = run_directories["metrics"] / "run_status.json"
+    ACTIVE_RUN_STATUS_PATH = status_path
+    started_utc = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    status_path.write_text(json.dumps({
+        "status": "running", "run_id": run_id,
+        "started_utc": started_utc,
+    }, indent=2) + "\n")
 
     started = time.time()
     tables = load_tables(zip_path)
@@ -149,7 +159,7 @@ def run(config_path: Path, dataset_override: str | None = None) -> dict[str, Any
 
     metric_document: dict[str, Any] = {
         "experiment": "azure_pdm_offline_experiment",
-        "experiment_version": "0.1.0",
+        "experiment_version": "0.2.0",
         "dataset_zip": str(zip_path),
         "dataset_zip_sha256": sha256(zip_path),
         "config_sha256": sha256(config_path),
@@ -164,6 +174,7 @@ def run(config_path: Path, dataset_override: str | None = None) -> dict[str, Any
     }
     result_lookup: dict[tuple[str, str, str, str, str], dict[str, Any]] = {}
     test_score_cache: dict[tuple[str, str, str, str, str], tuple[pd.DataFrame, np.ndarray, np.ndarray, float]] = {}
+    validation_score_cache: dict[tuple[str, str, str, str, str], tuple[pd.DataFrame, np.ndarray, np.ndarray]] = {}
     horizons = list(HORIZONS_HOURS.items())
 
     for split_name, (masks, _) in split_sets.items():
@@ -230,6 +241,14 @@ def run(config_path: Path, dataset_override: str | None = None) -> dict[str, Any
                         "feature_columns": feature_columns,
                         "component_order": list(COMPONENTS),
                         "horizon_hours": horizon_hours,
+                        "experiment_name": "azure_pdm_offline_experiment",
+                        "experiment_version": "0.2.0",
+                        "model_version": f"azure-pdm-{run_id}-{split_name}-{horizon_name}-{feature_variant}-{model_name}",
+                        "dataset_identifier": "microsoft-azure-pdm-synthetic-benchmark",
+                        "dataset_zip_sha256": metric_document["dataset_zip_sha256"],
+                        "config_sha256": metric_document["config_sha256"],
+                        "split": split_name,
+                        "run_id": run_id,
                         "thresholds_selected_on_validation": thresholds,
                         "probabilities_calibrated": False,
                     }, model_path, compress=3)
@@ -254,6 +273,11 @@ def run(config_path: Path, dataset_override: str | None = None) -> dict[str, Any
                         result_lookup[key] = entry
                         test_score_cache[key] = (sliced["test"][["machineID", "datetime"]],
                                                   test_targets[target_name], score, threshold)
+                        validation_score_cache[key] = (
+                            sliced["validation"][["machineID", "datetime"]],
+                            validation_targets[target_name],
+                            val_scores[target_name],
+                        )
                         metric_document["results"].append(entry)
 
                     # Keep validation AP alongside all test metrics so candidate selection
@@ -292,11 +316,24 @@ def run(config_path: Path, dataset_override: str | None = None) -> dict[str, Any
                     int(config.get("machine_bootstrap_replicates", 100)),
                 )
                 entry["machine_cluster_average_precision_ci_95"] = ci
+                validation_rows, validation_labels, validation_scores = validation_score_cache[key]
+                budget_curve = validation_alert_budget_curve(
+                    validation_rows,
+                    tables.failures,
+                    dict(horizons)[horizon_name],
+                    target_name,
+                    validation_labels,
+                    validation_scores,
+                    list(map(float, config.get("candidate_false_alarm_budgets_per_machine_week", []))),
+                    threshold_quantiles=int(config.get("alert_curve_threshold_quantiles", 21)),
+                )
+                entry["validation_alert_budget_curve"] = budget_curve
                 selected.append({"split": split_name, "horizon": horizon_name, "target": target_name,
                                  "model": model_name, "feature_variant": feature_variant,
                                  "validation_average_precision": entry.get("validation_average_precision"),
                                  "test_average_precision": entry.get("average_precision"),
                                  "test_threshold": threshold,
+                                 "validation_alert_budget_curve": budget_curve,
                                  "test_machine_cluster_ap_ci_95": ci})
 
     metric_document["selected_by_validation"] = selected
@@ -310,7 +347,23 @@ def run(config_path: Path, dataset_override: str | None = None) -> dict[str, Any
     }
     metric_path.write_text(json.dumps(metric_document, indent=2, allow_nan=False) + "\n")
     (run_directories["reports"] / "data_audit.json").write_text(json.dumps(data_audit, indent=2) + "\n")
+    (run_directories["reports"] / "config_snapshot.json").write_text(json.dumps(config, indent=2) + "\n")
+    (run_directories["reports"] / "feature_schema.json").write_text(json.dumps({
+        "feature_columns": feature_columns,
+        "identifier_columns_excluded": ["machineID", "datetime"],
+        "target_columns_excluded": [f"y_{horizon}_{target}" for horizon in HORIZONS_HOURS
+                                    for target in (*COMPONENTS, "any")],
+        "model_category_included_only_as_ablation": True,
+        "machine_age_included": False,
+    }, indent=2) + "\n")
     write_report(run_directories["reports"] / "experiment_report.md", metric_document, config)
+    status_path.write_text(json.dumps({
+        "status": "complete", "run_id": run_id,
+        "started_utc": started_utc,
+        "completed_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "result_count": len(metric_document["results"]),
+    }, indent=2) + "\n")
+    ACTIVE_RUN_STATUS_PATH = None
     return metric_document
 
 
@@ -387,6 +440,54 @@ def write_report(path: Path, metrics: dict[str, Any], config: dict[str, Any]) ->
         )
     lines.extend([
         "",
+        "## Validation-only alert-budget trade-offs",
+        "",
+        "Candidate budgets below are configurable exploration settings, not approved operational limits. For each selected candidate, the threshold is chosen on validation data to maximize event recall under the candidate false-alarm rate, with precision and threshold as tie-breaks. Test data does not choose these thresholds. Component-level curves are in `evaluation.json`.",
+        "",
+        "| Split | Horizon | Candidate budget / machine-week | Validation threshold | Validation precision | Validation recall | Validation event recall | Validation false alarms / machine-week |",
+        "|---|---|---:|---:|---:|---:|---:|---:|",
+    ])
+    for item in metrics["selected_by_validation"]:
+        if item["target"] != "any":
+            continue
+        for point in item.get("validation_alert_budget_curve", []):
+            if not point.get("budget_feasible"):
+                continue
+            lines.append(
+                f"| {item['split']} | {item['horizon']} | {point['candidate_budget_per_machine_week']:.2f} | "
+                f"{point['threshold']:.6g} | {point['precision']:.4f} | {point['recall']:.4f} | "
+                f"{point['event_recall'] if point['event_recall'] is not None else 'n/a'} | "
+                f"{point['false_alarms_per_machine_week']:.6g} |"
+            )
+    lines.extend([
+        "",
+        "## Logged-event warning lead-time coverage",
+        "",
+        "Fractions use all test-period logged events as the denominator, including missed events. These are lead times to rounded logged timestamps, not physical-onset warnings.",
+        "",
+        "| Split | Horizon | Any-component events | Events warned ≥24h | Events warned ≥7d | Median lead time (hours) |",
+        "|---|---|---:|---:|---:|---:|",
+    ])
+    for item in metrics["selected_by_validation"]:
+        if item["target"] != "any":
+            continue
+        entry = next((row for row in metrics["results"] if row.get("split") == item["split"]
+                      and row.get("horizon") == item["horizon"] and row.get("target") == "any"
+                      and row.get("selected_by_validation")), {})
+        event = entry.get("event_metrics", {})
+        coverage = event.get("warning_coverage", {})
+        lead = event.get("lead_time_hours", {}).get("median")
+        total_events = event.get("event_count", 0)
+        fraction_24h = coverage.get("fraction_of_all_events_warned_at_least_24h")
+        fraction_7d = coverage.get("fraction_of_all_events_warned_at_least_7d")
+        lines.append(
+            f"| {item['split']} | {item['horizon']} | {total_events} | "
+            f"{coverage.get('events_warned_at_least_24h', 0)} ({fraction_24h if fraction_24h is not None else 'n/a'}) | "
+            f"{coverage.get('events_warned_at_least_7d', 0)} ({fraction_7d if fraction_7d is not None else 'n/a'}) | "
+            f"{lead if lead is not None else 'n/a'} |"
+        )
+    lines.extend([
+        "",
         "## Acceptance and limitations",
         "",
         "The alert budget and minimum acceptable event recall are intentionally unset in `config.json`; no defensible operational values were supplied. Deployment acceptance is therefore undecided regardless of benchmark scores. The benchmark is synthetic, spans about one year, has sparse component events, uses rounded timestamps, and does not verify repairs or physical failure onset. These results cannot establish calibrated probabilities, guaranteed 24-hour/7-day warning, or production generalization.",
@@ -409,7 +510,15 @@ def main() -> None:
     parser.add_argument("--config", type=Path, default=ROOT / "config.json")
     parser.add_argument("--dataset-zip", default=None, help="Override the ZIP path in config.json")
     args = parser.parse_args()
-    result = run(args.config.resolve(), args.dataset_zip)
+    try:
+        result = run(args.config.resolve(), args.dataset_zip)
+    except BaseException as exc:
+        if ACTIVE_RUN_STATUS_PATH is not None and ACTIVE_RUN_STATUS_PATH.exists():
+            ACTIVE_RUN_STATUS_PATH.write_text(json.dumps({
+                "status": "interrupted" if isinstance(exc, KeyboardInterrupt) else "failed",
+                "error_type": type(exc).__name__,
+            }, indent=2) + "\n")
+        raise
     print(json.dumps({
         "dataset_zip_sha256": result["dataset_zip_sha256"],
         "result_count": len(result["results"]),

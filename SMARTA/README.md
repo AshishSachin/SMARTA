@@ -72,3 +72,24 @@ flutter run -d web-server --web-hostname 127.0.0.1 --web-port 5173
 The app calls `http://localhost:8000` by default. Configure a different address in `flutter_app/lib/services/api_service.dart` when running the API on another host.
 
 Run backend tests from this directory with `../.venv/bin/python -m unittest discover -s tests -v`. Run Flutter checks from `flutter_app/` with `flutter test` and `flutter analyze` when Flutter is installed.
+
+## Experimental Azure PdM benchmark
+
+The separate `experiments/azure_pdm/` package is an offline experiment only. It predicts logged events from trailing telemetry and event history; it is not connected to the production API or Flutter simulator. The scores are uncalibrated and the archive is a synthetic benchmark. Its license was not included in the supplied ZIP, so redistribution and deployment rights remain unverified.
+
+Run the experiment with the supplied archive:
+
+```sh
+../.venv/bin/python -m experiments.azure_pdm.train \
+  --dataset-zip ~/Downloads/archive.zip
+```
+
+To reproduce the integrity audit of the completed saved run without retraining it:
+
+```sh
+../.venv/bin/python -m experiments.azure_pdm.audit \
+  --dataset-zip ~/Downloads/archive.zip \
+  --source-run run_20261013T112729_896513000Z
+```
+
+Each training or audit run writes unique metrics and reports. `config.json` contains unapproved exploratory alert-budget candidates; the approved operating budget and minimum event recall remain unset. The audit command verifies the supplied ZIP hash, reloads saved artifacts, reproduces locked-test AP, and reports feature-group diagnostics and validation-only alert-budget curves. It does not modify the production AI4I artifact.

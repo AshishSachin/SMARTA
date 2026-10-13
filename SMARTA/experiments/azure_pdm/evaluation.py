@@ -117,6 +117,8 @@ def event_metrics(rows: pd.DataFrame, failures: pd.DataFrame, horizon_hours: int
     total_events = int(len(events))
     detected = len(matched_event_keys)
     elapsed_machine_weeks = len(frame) / 168.0
+    warned_24h = int(sum(lead >= 24.0 for lead in lead_times))
+    warned_7d = int(sum(lead >= 168.0 for lead in lead_times))
     return {
         "event_count": total_events,
         "detected_events": int(detected),
@@ -131,7 +133,73 @@ def event_metrics(rows: pd.DataFrame, failures: pd.DataFrame, horizon_hours: int
             "p10": float(np.percentile(lead_times, 10)) if lead_times else None,
             "p90": float(np.percentile(lead_times, 90)) if lead_times else None,
         },
+        # Denominator includes missed events, so this is coverage of all logged
+        # events rather than a percentage conditioned on an alert being matched.
+        "warning_coverage": {
+            "events_warned_at_least_24h": warned_24h,
+            "fraction_of_all_events_warned_at_least_24h": float(warned_24h / total_events) if total_events else None,
+            "events_warned_at_least_7d": warned_7d,
+            "fraction_of_all_events_warned_at_least_7d": float(warned_7d / total_events) if total_events else None,
+        },
     }
+
+
+def validation_alert_budget_curve(
+    rows: pd.DataFrame,
+    failures: pd.DataFrame,
+    horizon_hours: int,
+    target: str,
+    labels: np.ndarray,
+    scores: np.ndarray,
+    candidate_budgets: list[float],
+    *,
+    threshold_quantiles: int = 41,
+) -> list[dict[str, Any]]:
+    """Choose max event recall under each candidate budget using validation only.
+
+    The thresholds are drawn from validation score quantiles. Candidate budget
+    values are exploration settings, not approved operating requirements.
+    """
+    scores = np.asarray(scores, dtype=float)
+    labels = np.asarray(labels, dtype=np.uint8)
+    if len(rows) != len(scores) or len(labels) != len(scores):
+        raise ValueError("validation rows, labels, and scores must have equal lengths")
+    if not candidate_budgets or any(float(value) < 0 for value in candidate_budgets):
+        raise ValueError("candidate alert budgets must be non-negative values")
+    quantiles = np.linspace(0.0, 1.0, max(2, int(threshold_quantiles)))
+    thresholds = np.unique(np.quantile(scores, quantiles))
+    thresholds = np.append(thresholds, np.nextafter(float(np.max(scores)), np.inf))
+    points: list[dict[str, Any]] = []
+    for threshold in thresholds:
+        row = row_metrics(labels, scores, float(threshold))
+        events = event_metrics(rows, failures, horizon_hours, target, scores, float(threshold))
+        points.append({
+            "threshold": float(threshold),
+            "precision": row["precision"],
+            "recall": row["recall"],
+            "event_recall": events["event_recall"],
+            "false_alarms_per_machine_week": events["false_alarms_per_machine_week"],
+            "missed_events": events["missed_events"],
+            "warning_coverage": events.get("warning_coverage", {}),
+        })
+
+    curve = []
+    for budget in sorted(set(map(float, candidate_budgets))):
+        feasible = [point for point in points
+                    if point["false_alarms_per_machine_week"] is not None
+                    and point["false_alarms_per_machine_week"] <= budget]
+        if feasible:
+            chosen = max(feasible, key=lambda point: (
+                -1.0 if point["event_recall"] is None else point["event_recall"],
+                point["precision"],
+                point["threshold"],
+            ))
+            curve.append({"candidate_budget_per_machine_week": budget,
+                          "budget_feasible": True, **chosen})
+        else:
+            curve.append({"candidate_budget_per_machine_week": budget,
+                          "budget_feasible": False, "threshold": None})
+    return curve
 
 
 def machine_bootstrap_ap_ci(rows: pd.DataFrame, labels: np.ndarray, scores: np.ndarray,

@@ -31,9 +31,12 @@ async def lifespan(_: FastAPI):
     global _corpus_status, _ingestion_error
     try:
         _corpus_status = initialize_corpus()
-    except Exception as exc:
-        _ingestion_error = str(exc)
-        print(f"SMARTA corpus initialization failed: {exc}")
+    except Exception:
+        # Database drivers can include a credential-bearing connection URL in
+        # exception messages. Keep the health state useful without returning
+        # or printing that diagnostic verbatim.
+        _ingestion_error = "corpus_initialization_failed"
+        print("SMARTA corpus initialization failed.")
     yield
 
 
@@ -104,11 +107,18 @@ def health():
         _corpus_status = corpus_stats()
     except Exception:
         pass
+    try:
+        _predictor.metadata()
+        predictor_status = "ready"
+    except ModelUnavailable:
+        predictor_status = "not_trained"
+    except Exception:
+        predictor_status = "unavailable"
     return {
         "status": "ok" if _corpus_status.get("documents", 0) else "degraded",
         "corpus": _corpus_status,
         "mysql_credentials_configured": mysql_credentials_available(),
-        "predictive_model": "ready" if _predictor.artifact_path.is_file() else "not_trained",
+        "predictive_model": predictor_status,
         "ingestion_error": _ingestion_error,
     }
 
@@ -157,7 +167,11 @@ def chat(request: ChatRequest):
         else:
             answer = generate_answer(context=context, question=question)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"SMARTA could not generate a response: {exc}") from exc
+        # Do not expose provider, SQL, filesystem, or prompt details to clients.
+        raise HTTPException(
+            status_code=500,
+            detail="SMARTA could not generate a response. Please try again later.",
+        ) from exc
 
     citations = [
         f"[{index}] {item['source']}, {item['locator']}"

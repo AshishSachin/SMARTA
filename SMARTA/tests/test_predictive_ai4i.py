@@ -1,4 +1,7 @@
 import json
+import asyncio
+import contextlib
+import io
 import tempfile
 import unittest
 import zipfile
@@ -178,6 +181,34 @@ class Ai4iTests(unittest.TestCase):
             self.assertEqual(response.sources, ["[1] logs.xlsx, row 3"])
         finally:
             api._corpus_status = old_status
+
+    def test_chat_does_not_expose_internal_provider_errors(self):
+        old_status = api._corpus_status
+        api._corpus_status = {"documents": 1, "maintenance_records": 0, "sources": 1}
+        try:
+            with patch("api.retrieve", return_value=[{
+                "source": "manual.pdf", "locator": "page 1", "text": "A safe excerpt."
+            }]), patch("api.generate_answer", side_effect=RuntimeError("credential-bearing internal detail")):
+                with self.assertRaises(HTTPException) as error:
+                    chat(ChatRequest(question="Explain this maintenance issue"))
+            self.assertEqual(error.exception.status_code, 500)
+            self.assertNotIn("credential-bearing", error.exception.detail)
+            self.assertEqual(error.exception.detail, "SMARTA could not generate a response. Please try again later.")
+        finally:
+            api._corpus_status = old_status
+
+    def test_corpus_startup_error_is_sanitized(self):
+        api._ingestion_error = None
+        output = io.StringIO()
+
+        async def enter_lifespan():
+            async with api.lifespan(api.app):
+                return
+
+        with patch("api.initialize_corpus", side_effect=RuntimeError("secret connection URL")), contextlib.redirect_stdout(output):
+            asyncio.run(enter_lifespan())
+        self.assertEqual(api._ingestion_error, "corpus_initialization_failed")
+        self.assertNotIn("secret connection URL", output.getvalue())
 
     def test_api_handles_untrained_model(self):
         request = PredictRequest(machine_id="test", features={

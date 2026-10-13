@@ -1,4 +1,5 @@
 {
+  "experiment_version": "0.2.0",
   "dataset_zip": "/Users/ashishsachinas/Downloads/archive.zip",
   "seed": 20261013,
   "max_horizon_hours": 168,
@@ -17,6 +18,15 @@
   "threshold_selection": "max_f1_validation_tie_break_fewer_alerts",
   "false_alarm_budget_per_machine_week": null,
   "minimum_event_recall": null,
+  "candidate_false_alarm_budgets_per_machine_week": [
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    1.0
+  ],
+  "candidate_budgets_are_operationally_approved": false,
+  "alert_curve_threshold_quantiles": 21,
   "machine_bootstrap_replicates": 100,
   "directories": {
     "artifacts": "artifacts",
