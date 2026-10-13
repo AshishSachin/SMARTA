@@ -146,7 +146,7 @@ class AppTheme {
       ),
 
       scrollbarTheme: ScrollbarThemeData(
-        thumbColor: WidgetStateProperty.all(accent.withOpacity(.7)),
+        thumbColor: WidgetStateProperty.all(accent.withValues(alpha: .7)),
         radius: const Radius.circular(20),
       ),
     );

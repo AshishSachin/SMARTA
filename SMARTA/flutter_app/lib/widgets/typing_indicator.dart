@@ -39,9 +39,9 @@ class _TypingIndicatorState extends State<TypingIndicator>
           horizontal: 18,
           vertical: 16,
         ),
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: AppTheme.card,
-          borderRadius: const BorderRadius.only(
+          borderRadius: BorderRadius.only(
             topLeft: Radius.circular(18),
             topRight: Radius.circular(18),
             bottomRight: Radius.circular(18),
