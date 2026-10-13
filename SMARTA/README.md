@@ -75,7 +75,7 @@ Run backend tests from this directory with `../.venv/bin/python -m unittest disc
 
 ## Experimental Azure PdM benchmark
 
-The separate `experiments/azure_pdm/` package is an offline experiment only. It predicts logged events from trailing telemetry and event history; it is not connected to the production API or Flutter simulator. The scores are uncalibrated and the archive is a synthetic benchmark. Its license was not included in the supplied ZIP, so redistribution and deployment rights remain unverified.
+The separate `experiments/azure_pdm/` package is an offline experiment only. It predicts logged events from trailing telemetry and event history; it is not connected to the production API or Flutter simulator. The scores are uncalibrated and the archive is a synthetic benchmark. Microsoft's [sample notebook](https://github.com/microsoft/sqlworkshops/blob/master/SQLServerAndAzureMachineLearning/ML%20Services%20for%20SQL%20Server/notebooks/Predictive%20Maintenance%20in%20Python%20Notebook.ipynb) describes the scenario as a synthesis of real-world problems with simulated data. The notebook repository has an [MIT license](https://github.com/microsoft/sqlworkshops/blob/master/LICENSE), but neither that license nor a dataset-specific license is included in the supplied ZIP; applicability to the data, redistribution, and deployment rights remain unverified.
 
 Run the experiment with the supplied archive:
 

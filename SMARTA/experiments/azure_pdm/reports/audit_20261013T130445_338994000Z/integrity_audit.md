@@ -5,6 +5,7 @@ This is a post-training audit of saved experimental artifacts. It does not chang
 - Audit run: `audit_20261013T130445_338994000Z`
 - Source training run: `run_20261013T112729_896513000Z`
 - Dataset ZIP SHA-256: `7575444d4d605b1f7155ab937cf541243afe07fce1afba998bf4195e8e84e1eb`
+- Provenance: the archive matches Microsoft's Azure PdM sample schema and counts. Microsoft's [sample notebook](https://github.com/microsoft/sqlworkshops/blob/master/SQLServerAndAzureMachineLearning/ML%20Services%20for%20SQL%20Server/notebooks/Predictive%20Maintenance%20in%20Python%20Notebook.ipynb) describes simulated data synthesized from multiple real-world business problems. The upstream repository's [MIT license](https://github.com/microsoft/sqlworkshops/blob/master/LICENSE) is not a dataset-specific license, so applicability to the supplied ZIP and redistribution/deployment rights remain unverified.
 - Saved selected candidates re-evaluated: 30
 - Locked-test AP reproduced within 1e-10: True
 - Model outputs remain uncalibrated logged-event scores; none are available for production routing.

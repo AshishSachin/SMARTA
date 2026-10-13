@@ -8,7 +8,7 @@ This report describes an offline benchmark experiment. It does not change or rep
 - Configuration SHA-256: `b47f6edcfc3d93cce33247388b1fffa220432777ea88ab0cf2c63bfdb023f403`
 - Random seed: `20261013`
 - Deployment acceptance: undecided: operational alert budget and minimum recall are unset
-- Provenance: matches the Microsoft Azure PdM sample schema and counts; Microsoft describes the benchmark as synthesized from multiple real-world problems. The supplied ZIP contains no license manifest; redistribution and deployment rights remain unverified.
+- Provenance: matches the Microsoft Azure PdM sample schema and counts. Microsoft's [sample notebook](https://github.com/microsoft/sqlworkshops/blob/master/SQLServerAndAzureMachineLearning/ML%20Services%20for%20SQL%20Server/notebooks/Predictive%20Maintenance%20in%20Python%20Notebook.ipynb) describes a synthesis of real-world business problems whose data is created through simulation. The notebook repository has an [MIT license](https://github.com/microsoft/sqlworkshops/blob/master/LICENSE), but the supplied ZIP has no dataset-specific license; whether the repository license applies to the data, and the rights to redistribute or deploy this dataset, remain unverified.
 
 ## Data audit
 
